@@ -67,7 +67,6 @@ h1{font-size:22px;margin:0 0 6px}
 .cell.wide{width:130px}
 @keyframes shake{25%{transform:translateX(-3px)}75%{transform:translateX(3px)}}
 
-/* read-only cell */
 .cell-ro{
   width:var(--cw);height:52px;border-radius:10px;
   border:2px solid var(--line);background:rgba(255,255,255,.02);
@@ -87,7 +86,6 @@ h1{font-size:22px;margin:0 0 6px}
   border-radius:8px;padding:4px 10px;font-size:12px;cursor:pointer;font-family:inherit}
 .btn-mini:hover{border-color:var(--bad);color:var(--bad)}
 
-/* copy-row button */
 .copy-row-btn{
   width:28px;height:28px;border-radius:8px;border:1px solid var(--line);
   background:transparent;color:var(--muted);cursor:pointer;font-size:14px;
@@ -142,8 +140,6 @@ h1{font-size:22px;margin:0 0 6px}
   gap:10px;flex-wrap:wrap;margin-bottom:10px}
 .formula-line{font-family:ui-monospace,Consolas,monospace;color:var(--muted);
   font-size:13px;line-height:1.6;margin:6px 0;word-break:break-all}
-
-.b-column{border-left:1px dashed var(--line);padding-left:8px;margin-left:2px}
 
 .eq-row{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin:6px 0}
 .eq-row .cell{width:130px;height:46px;font-size:15px}
@@ -204,10 +200,10 @@ h1{font-size:22px;margin:0 0 6px}
         <h2>Метод Гаусса</h2>
         <div class="hint">
           Приводи матрицу (или расширенную [A|B]) к треугольному виду сложением / вычитанием строк.
-          Умножение строки на число и перестановки МЕНЯЮТ определитель — их лучше не использовать.
-          Нажми <b>↓</b> слева от строки, чтобы скопировать её из предыдущего шага (для 1-го шага — из исходной матрицы):
-          так удобно переписывать неизменённые строки, не сбивая порядок.
-          Если столбец B заполнен, внизу появится блок для ответа <b>x</b>.
+          Умножение строки на число и перестановки МЕНЯЮТ определитель.
+          Кнопка <b>↓</b> переносит строку из предыдущего шага (для 1-го — из исходной матрицы),
+          включая дробные значения.
+          Если столбец B заполнен, для каждого шага проверяется согласованность B с действиями над A.
         </div>
         <div id="gaussBody"></div>
       </div>
@@ -365,7 +361,6 @@ function inverseMatrix(M){
   return adj.map(row=>row.map(v=>v/d));
 }
 
-/* Решение A·x = B методом Крамера (если существует единственное) */
 function solveCramer(A, B){
   const n = A.length;
   const D = det(A);
@@ -379,7 +374,6 @@ function solveCramer(A, B){
   return x;
 }
 
-/* Решение A·x = B через A⁻¹·B */
 function solveByInverse(A, B){
   const inv = inverseMatrix(A);
   if (!inv) return null;
@@ -539,7 +533,6 @@ function buildAijRow(rows, cols, expectedFn, navGroup){
   return grid;
 }
 
-/* read-only grid (для отображения Ak в Крамере, A⁻¹ в СЛАУ и т.д.) */
 function buildReadonlyGrid(values, highlightColumn){
   const n = values.length;
   const g = el('div','grid');
@@ -569,8 +562,11 @@ function buildReadonlyVector(values){
 /* ================= состояние ================= */
 const state = {
   n: 3,
-  steps: [],                 // [{A:[[...]], B:[...]}]
-  detMode: { type:'row', index:0, n:3 }
+  steps: [],
+  detMode: { type:'row', index:0, n:3 },
+  lastB: null,
+  bComplete: false,
+  bEmpty: true
 };
 
 const emptyStep = n => ({
@@ -635,6 +631,30 @@ function readMainMatrix(){
   return M;
 }
 
+/* читаем «как есть» — строки, а не числа (для копирования строк) */
+function readMainMatrixRaw(){
+  const n = state.n;
+  const box = $('#mainMatrix');
+  const M = Array.from({length:n},()=>Array(n).fill(''));
+  for (let r=0;r<n;r++)
+    for (let c=0;c<n;c++){
+      const inp = box.querySelector(`.cell[data-r="${r}"][data-c="${c}"]`);
+      M[r][c] = inp.value;
+    }
+  return M;
+}
+
+function readBRaw(){
+  const n = state.n;
+  const box = $('#bVector');
+  const B = Array(n).fill('');
+  for (let r=0;r<n;r++){
+    const inp = box.querySelector(`.cell[data-r="${r}"]`);
+    B[r] = inp.value;
+  }
+  return B;
+}
+
 function readB(){
   const n = state.n;
   const B = Array(n).fill(NaN);
@@ -654,7 +674,6 @@ function rebuildSections(){
   const bComplete = B.every(v=>!isNaN(v));
   const bEmpty = B.every(v=>isNaN(v));
 
-  // храним B в состоянии для последующих рендеров
   state.lastB = B;
   state.bComplete = bComplete;
   state.bEmpty = bEmpty;
@@ -670,7 +689,7 @@ function rebuildSections(){
   runChecks();
 }
 
-/* ---------- 1. Метод Гаусса (с поддержкой СЛАУ) ---------- */
+/* ---------- 1. Метод Гаусса ---------- */
 function renderGauss(M, complete){
   clearSectionChecks('gauss');
   currentSection = 'gauss';
@@ -683,8 +702,7 @@ function renderGauss(M, complete){
   }
   const n = M.length;
   const B = state.lastB;
-  const bComplete = state.bComplete;
-  const hasB = bComplete;
+  const hasB = state.bComplete;
 
   if (!state.steps.length) state.steps = [emptyStep(n)];
   state.steps = state.steps.map(s=>{
@@ -707,7 +725,6 @@ function renderGauss(M, complete){
   };
   box.appendChild(add);
 
-  /* ----- определитель ----- */
   const detBlock = el('div','det-in-gauss');
   detBlock.appendChild(el('div','step-title','Определитель'));
   detBlock.appendChild(el('div','hint',
@@ -725,9 +742,7 @@ function renderGauss(M, complete){
   detBlock.appendChild(dRow);
   box.appendChild(detBlock);
 
-  /* ----- решение x (только если B заполнен) ----- */
   if (hasB){
-    const xExpected = solveByInverse(M, B); // через A⁻¹·B; проверим позже
     const xByGauss = solveByGauss(M, B);
 
     const xBlock = el('div','answer-block');
@@ -739,8 +754,7 @@ function renderGauss(M, complete){
     const xRow = el('div','row');
     for (let i=0;i<n;i++){
       const wrap = el('div','eq-row');
-      const lbl = el('span','label','x' + sub(i+1) + ' =');
-      wrap.appendChild(lbl);
+      wrap.appendChild(el('span','label','x' + sub(i+1) + ' ='));
       const inp = el('input','cell wide');
       inp.type = 'text'; inp.autocomplete = 'off';
       setupNav(inp, 'gauss-x', 0, i);
@@ -754,12 +768,10 @@ function renderGauss(M, complete){
   }
 }
 
-/* Решение треугольной системы обратной подстановкой (проверяет только саму систему) */
 function solveByGauss(A, B){
-  // используем rref: если решение единственное — вернём его
   const n = A.length;
   const r = rank(A);
-  if (r !== n) return null; // не единственное
+  if (r !== n) return null;
   const inv = inverseMatrix(A);
   if (!inv) return null;
   const x = [];
@@ -789,37 +801,39 @@ function makeStep(step, idx, M, B, hasB, isLast){
   head.appendChild(del);
   wrap.appendChild(head);
 
-  /* сетка: [кнопка][A…][B?] */
   const cols = hasB ? n + 1 : n;
   const grid = el('div','grid');
   grid.style.gridTemplateColumns = `32px repeat(${cols}, var(--cw))`;
 
-  const inputs = [];   // input-ячейки A
-  const inputsB = [];  // input-ячейки B
+  const inputs = [];
+  const inputsB = [];
   for (let r=0;r<n;r++){
-    /* кнопка копирования строки из предыдущего шага */
     const copyBtn = el('button','copy-row-btn','↓');
-    copyBtn.title = 'Скопировать строку ' + (r+1) + ' из ' + (idx === 0 ? 'исходной матрицы' : 'шага ' + idx);
+    copyBtn.title = 'Скопировать строку ' + (r+1) + ' из ' +
+      (idx === 0 ? 'исходной матрицы' : 'шага ' + idx);
     copyBtn.onclick = ()=>{
-      const srcA = idx === 0 ? readMainMatrix() : state.steps[idx-1].A.map(row=>row.map(v=>v));
-      const srcB = idx === 0 ? readB() : (state.steps[idx-1].B || []).slice();
-      // копируем A
+      /* Берём значения «как есть» — дроби сохраняются без изменений */
+      const srcA = idx === 0
+        ? readMainMatrixRaw()
+        : state.steps[idx-1].A.map(row=>row.map(v=>String(v == null ? '' : v)));
+      const srcB = idx === 0
+        ? readBRaw()
+        : (state.steps[idx-1].B || []).map(v=>String(v == null ? '' : v));
+
       for (let c=0;c<n;c++){
         const v = srcA[r][c];
-        inputs[r][c].value = isFinite(v) ? fmt(v) : '';
+        inputs[r][c].value = (v != null) ? v : '';
         step.A[r][c] = inputs[r][c].value;
       }
-      // копируем B (если есть)
       if (hasB && inputsB[r]){
-        const bv = srcB[r];
-        inputsB[r].value = isFinite(bv) ? fmt(bv) : '';
+        const v = srcB[r];
+        inputsB[r].value = (v != null) ? v : '';
         step.B[r] = inputsB[r].value;
       }
       runChecks();
     };
     grid.appendChild(copyBtn);
 
-    /* A cells */
     inputs.push([]);
     for (let c=0;c<n;c++){
       const inp = el('input','cell');
@@ -831,7 +845,6 @@ function makeStep(step, idx, M, B, hasB, isLast){
       grid.appendChild(inp);
     }
 
-    /* B cell */
     if (hasB){
       const inp = el('input','cell');
       inp.type = 'text'; inp.autocomplete = 'off';
@@ -851,27 +864,34 @@ function makeStep(step, idx, M, B, hasB, isLast){
     section:'gauss',
     run(){
       inputs.forEach(row=>row.forEach(i=>i.classList.remove('ok','bad')));
+      inputsB.forEach(i=>i.classList.remove('ok','bad'));
       status.className = 'status'; status.textContent = '';
 
       const V = inputs.map(row=>row.map(i=>parseNum(i.value)));
       if (!V.every(row=>row.every(v=>!isNaN(v)))) return;
 
+      const VB = hasB ? inputsB.map(i=>parseNum(i.value)) : null;
+      const bFilled = hasB && VB.every(v=>!isNaN(v));
+
       const tri = isUpperTriangular(V);
       const detM = det(M);
       const detV = det(V);
 
+      /* 1) Ранг A сохраняется */
       if (rank(V) !== rank(M)){
         inputs.forEach(row=>row.forEach(i=>i.classList.add('bad')));
         status.className = 'status bad';
         status.textContent = '✗ Ранг изменился — строки больше не эквивалентны исходной.';
         return;
       }
+
+      /* 2) Определитель A сохраняется */
       if (!eq(detV, detM)){
         inputs.forEach(row=>row.forEach(i=>i.classList.add('bad')));
         status.className = 'status bad';
         if (eq(detV, -detM)){
           status.textContent = '✗ Определитель сменил знак: det(M) = ' + fmt(detM) +
-            ', а det(V) = ' + fmt(detV) + '. Возможно, строка умножена на −1.';
+            ', det(V) = ' + fmt(detV) + '. Возможно, строка умножена на −1.';
         } else if (Math.abs(detM) > 1e-9){
           const r2 = Math.round(detV/detM);
           if (Math.abs(detV/detM - r2) < 1e-6 && Math.abs(r2) > 1){
@@ -888,6 +908,7 @@ function makeStep(step, idx, M, B, hasB, isLast){
         return;
       }
 
+      /* 3) Каждая строка V лежит в линейной оболочке строк M */
       let rowsOk = true;
       V.forEach((row,r)=>{
         const ok = inRowSpace(M, row);
@@ -900,13 +921,33 @@ function makeStep(step, idx, M, B, hasB, isLast){
         return;
       }
 
+      /* 4) Проверка согласованности столбца B */
+      if (hasB && bFilled){
+        const Aug = M.map((row,i) => [...row, B[i]]);
+        const AugV = V.map((row,i) => [...row, VB[i]]);
+
+        const augRankOk = rank(Aug) === rank(AugV);
+        const augRowsOk = AugV.every(r => inRowSpace(Aug, r));
+
+        if (!augRankOk || !augRowsOk){
+          inputsB.forEach(i => i.classList.add('bad'));
+          status.className = 'status bad';
+          status.textContent =
+            '✗ Матрица A преобразована верно, но столбец B не согласован с этими операциями. ' +
+            'Каждая строка [A′ᵣ | B′ᵣ] должна лежать в линейной оболочке строк исходной расширенной [A | B].';
+          return;
+        }
+        inputsB.forEach(i => i.classList.add('ok'));
+      }
+
       if (isLast && !tri){
         status.className = 'status warn';
-        status.textContent = '✓ Определитель и ранг сохранены, но последний шаг пока не треугольный.';
+        status.textContent = '✓ Матрица и B согласованы. Последний шаг пока не треугольный.';
         return;
       }
       status.className = 'status ok';
-      status.textContent = '✓ Шаг корректен: det и ранг сохранены.' +
+      status.textContent = '✓ Шаг корректен: det, ранг' +
+        (hasB && bFilled ? ' и столбец B' : '') + ' сохранены.' +
         (isLast ? ' Матрица треугольная.' : '');
     }
   });
@@ -1111,7 +1152,6 @@ function renderCramer(M, complete){
   const D = det(M);
   const solution = solveCramer(M, B);
 
-  /* D */
   box.appendChild(el('div','hint',
     'Метод Крамера: xₖ = Δₖ / Δ, где Δ = det(A), Δₖ — определитель матрицы A ' +
     'с заменённым k-м столбцом на B.'));
@@ -1125,7 +1165,6 @@ function renderCramer(M, complete){
   dRow.appendChild(dInp);
   box.appendChild(dRow);
 
-  /* Δₖ */
   for (let k=0;k<n;k++){
     const block = el('div','cramer-block');
 
@@ -1194,39 +1233,38 @@ function renderInvSlae(M, complete){
     'Решение: x = A⁻¹ · B. Матрица A⁻¹ и вектор B даны ниже; ' +
     'xᵢ — скалярное произведение i-й строки A⁻¹ на столбец B.'));
 
-  box.appendChild(el('div','step-title','A⁻¹'));
-  box.appendChild(buildReadonlyGrid(inv, -1));
+  if (inv){
+    box.appendChild(el('div','step-title','A⁻¹'));
+    box.appendChild(buildReadonlyGrid(inv, -1));
+  } else {
+    box.appendChild(el('div','hint','A вырождена (det A = 0) — обратной не существует.'));
+  }
 
   box.appendChild(el('div','step-title','B'));
   box.appendChild(buildReadonlyVector(B));
 
-  box.appendChild(el('div','step-title','Ответ x = A⁻¹·B'));
-  for (let i=0;i<n;i++){
-    const eqRow = el('div','eq-row');
-    eqRow.appendChild(el('span','label','x' + sub(i+1) + ' ='));
-
-    const terms = [];
-    for (let j=0;j<n;j++){
-      terms.push('(' + fmt(inv[i][j]) + ')·(' + fmt(B[j]) + ')');
+  if (inv){
+    box.appendChild(el('div','step-title','Ответ x = A⁻¹·B'));
+    for (let i=0;i<n;i++){
+      const eqRow = el('div','eq-row');
+      eqRow.appendChild(el('span','label','x' + sub(i+1) + ' ='));
+      const terms = [];
+      for (let j=0;j<n;j++) terms.push('(' + fmt(inv[i][j]) + ')·(' + fmt(B[j]) + ')');
+      eqRow.appendChild(el('span','formula-line', terms.join(' + ')));
+      const inp = el('input','cell wide');
+      inp.type = 'text'; setupNav(inp,'inv-slae-x',i,0);
+      inp.addEventListener('input', runChecksSoon);
+      addValueCheck(inp, x ? x[i] : null);
+      eqRow.appendChild(inp);
+      box.appendChild(eqRow);
     }
-    const formula = el('span','formula-line', terms.join(' + '));
-    eqRow.appendChild(formula);
-
-    const inp = el('input','cell wide');
-    inp.type = 'text'; setupNav(inp,'inv-slae-x',i,0);
-    inp.addEventListener('input', runChecksSoon);
-    addValueCheck(inp, x ? x[i] : null);
-    eqRow.appendChild(inp);
-    box.appendChild(eqRow);
   }
 
-  /* проверка исходной системы */
   const st = el('div','status');
   if (!x){
     st.className = 'status bad';
-    st.textContent = '✗ Матрица A вырождена (det A = 0) — метод через A⁻¹ не применим.';
+    st.textContent = '✗ Матрица A вырождена — метод через A⁻¹ не применим.';
   } else {
-    st.className = 'status';
     st.textContent = 'Подсказка: если у всех x зелёный — система решена верно.';
   }
   box.appendChild(st);
