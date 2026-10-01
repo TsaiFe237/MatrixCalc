@@ -30,7 +30,6 @@ h1{font-size:22px;margin:0 0 6px}
 .label{font-size:15px;color:var(--muted)}
 .group-label{display:block;font-size:13px;color:var(--muted);margin:10px 0 6px}
 
-/* размер */
 .size-controls{display:flex;gap:28px;flex-wrap:wrap;margin-bottom:16px}
 .size-group{display:flex;gap:6px;align-items:center;flex-wrap:wrap}
 .size-group .size-label{font-size:13px;color:var(--muted);margin-right:4px}
@@ -94,6 +93,27 @@ h1{font-size:22px;margin:0 0 6px}
   display:flex;align-items:center;justify-content:center;padding:0;
   align-self:center;justify-self:center;font-family:inherit;line-height:1}
 .copy-row-btn:hover{border-color:var(--accent);color:var(--accent)}
+
+/* разделительная полоска между A и B в Гауссе */
+.b-separator{
+  position:relative;
+  align-self:stretch;
+  justify-self:stretch;
+}
+.b-separator::before{
+  content:"";
+  position:absolute;
+  left:50%;
+  top:6px;
+  bottom:6px;
+  width:2px;
+  background:var(--line);
+  border-radius:2px;
+  transform:translateX(-50%);
+}
+.b-cell{
+  background:rgba(79,140,255,.05);
+}
 
 .tabs{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:16px}
 .tab{background:transparent;border:1px solid var(--line);color:var(--muted);
@@ -273,7 +293,8 @@ const el = (tag, cls, txt) => {
   return e;
 };
 
-const EPS = 1e-6;
+/* ★ Ужесточённая точность — раньше 1e-6 давал ложные "зелёные" на больших det */
+const EPS = 1e-9;
 
 function parseNum(s){
   if (typeof s !== 'string') return NaN;
@@ -306,7 +327,6 @@ const zeros = (n,m) => Array.from({length:n},()=>Array(m).fill(0));
 
 function transpose(M){ return M[0].map((_,j)=>M.map(r=>r[j])); }
 
-/* minor/t det работают только для квадратных */
 function minor(M,i,j){
   return M.filter((_,r)=>r!==i).map(row=>row.filter((_,c)=>c!==j));
 }
@@ -327,7 +347,7 @@ function rref(M){
   let r = 0, lead = 0;
   while (r < rows && lead < cols){
     let i = r;
-    while (i < rows && Math.abs(A[i][lead]) < 1e-9) i++;
+    while (i < rows && Math.abs(A[i][lead]) < 1e-12) i++;
     if (i === rows){ lead++; continue; }
     [A[i],A[r]] = [A[r],A[i]];
     const p = A[r][lead];
@@ -340,12 +360,12 @@ function rref(M){
     }
     r++; lead++;
   }
-  return A.map(row=>row.map(v=>Math.abs(v)<1e-9?0:v));
+  return A.map(row=>row.map(v=>Math.abs(v)<1e-12?0:v));
 }
 
 function rank(M){
   if (!M.length) return 0;
-  return rref(M).filter(row=>row.some(v=>Math.abs(v)>1e-9)).length;
+  return rref(M).filter(row=>row.some(v=>Math.abs(v)>1e-12)).length;
 }
 
 function inRowSpace(M,row){ return rank(M) === rank(M.concat([row])); }
@@ -719,13 +739,12 @@ function rebuildSections(){
   runChecks();
 }
 
-/* Общая подсказка для несовместимого размера */
 function squareOnlyHint(){
   return 'Этот раздел работает только для квадратных матриц. ' +
     'Сейчас выбрано ' + state.rows + '×' + state.cols + ' — сделайте число строк равным числу столбцов.';
 }
 
-/* ---------- 1. Метод Гаусса (любой размер) ---------- */
+/* ---------- 1. Метод Гаусса ---------- */
 function renderGauss(M, complete){
   clearSectionChecks('gauss');
   currentSection = 'gauss';
@@ -762,7 +781,6 @@ function renderGauss(M, complete){
   };
   box.appendChild(add);
 
-  /* Определитель — только для квадратных */
   if (isSquare()){
     const detBlock = el('div','det-in-gauss');
     detBlock.appendChild(el('div','step-title','Определитель'));
@@ -788,7 +806,6 @@ function renderGauss(M, complete){
     box.appendChild(info);
   }
 
-  /* Решение системы — только если квадрат и B заполнен */
   if (isSquare() && state.bComplete){
     const xByGauss = solveByGauss(M, B);
     const xBlock = el('div','answer-block');
@@ -848,9 +865,10 @@ function makeStep(step, idx, M, B, hasB, isLast){
   head.appendChild(del);
   wrap.appendChild(head);
 
-  const totalCols = hasB ? cols + 1 : cols;
   const grid = el('div','grid');
-  grid.style.gridTemplateColumns = `32px repeat(${totalCols}, var(--cw))`;
+  grid.style.gridTemplateColumns = hasB
+    ? `32px repeat(${cols}, var(--cw)) 18px var(--cw)`
+    : `32px repeat(${cols}, var(--cw))`;
 
   const inputs = [];
   const inputsB = [];
@@ -892,7 +910,10 @@ function makeStep(step, idx, M, B, hasB, isLast){
     }
 
     if (hasB){
-      const inp = el('input','cell');
+      const sep = el('div','b-separator');
+      grid.appendChild(sep);
+
+      const inp = el('input','cell b-cell');
       inp.type = 'text'; inp.autocomplete = 'off';
       setupNav(inp, 'gauss-step-' + idx, r, cols);
       inp.value = step.B[r] ?? '';
@@ -906,95 +927,108 @@ function makeStep(step, idx, M, B, hasB, isLast){
   const status = el('div','status');
   wrap.appendChild(status);
 
+  /* ★ Усиленная проверка шага */
   checks.push({
     section:'gauss',
     run(){
-      inputs.forEach(row=>row.forEach(i=>i.classList.remove('ok','bad')));
-      inputsB.forEach(i=>i.classList.remove('ok','bad'));
-      status.className = 'status'; status.textContent = '';
+      inputs.forEach(row => row.forEach(i => i.classList.remove('ok', 'bad')));
+      inputsB.forEach(i => i.classList.remove('ok', 'bad'));
+      status.className = 'status';
+      status.textContent = '';
 
-      const V = inputs.map(row=>row.map(i=>parseNum(i.value)));
-      if (!V.every(row=>row.every(v=>!isNaN(v)))) return;
+      /* читаем V, если хоть одна пустая — выходим */
+      const V = [];
+      let anyEmpty = false;
+      for (let r = 0; r < inputs.length; r++){
+        const rowV = [];
+        for (let c = 0; c < inputs[r].length; c++){
+          const v = parseNum(inputs[r][c].value);
+          if (isNaN(v)) anyEmpty = true;
+          rowV.push(v);
+        }
+        V.push(rowV);
+      }
+      if (anyEmpty) return;
 
-      const VB = hasB ? inputsB.map(i=>parseNum(i.value)) : null;
-
+      const VB = hasB ? inputsB.map(i => parseNum(i.value)) : null;
       const tri = isUpperTriangular(V);
-      const sq = rows === cols;
+      const sq = (rows === cols);
 
-      /* 1) Ранг A сохраняется */
-      if (rank(V) !== rank(M)){
-        inputs.forEach(row=>row.forEach(i=>i.classList.add('bad')));
+      /* 1) ранг */
+      const rM = rank(M), rV = rank(V);
+      if (rM !== rV){
+        inputs.forEach(row => row.forEach(i => i.classList.add('bad')));
         status.className = 'status bad';
-        status.textContent = '✗ Ранг изменился — строки больше не эквивалентны исходной.';
+        status.textContent = '✗ Ранг не совпадает: rank(M) = ' + rM + ', rank(V) = ' + rV;
         return;
       }
 
-      /* 2) Для квадратной — сохранение det */
+      /* 2) определитель (для квадратной) — жёсткий допуск относительно масштаба */
       if (sq){
-        const detM = det(M);
-        const detV = det(V);
-        if (!eq(detV, detM)){
-          inputs.forEach(row=>row.forEach(i=>i.classList.add('bad')));
+        const dM = det(M), dV = det(V);
+        const diff = Math.abs(dV - dM);
+        const scale = Math.max(1, Math.abs(dM), Math.abs(dV));
+        if (diff > 1e-9 * scale){
+          inputs.forEach(row => row.forEach(i => i.classList.add('bad')));
           status.className = 'status bad';
-          if (eq(detV, -detM)){
-            status.textContent = '✗ Определитель сменил знак: det(M) = ' + fmt(detM) +
-              ', det(V) = ' + fmt(detV) + '. Возможно, строка умножена на −1.';
-          } else if (Math.abs(detM) > 1e-9){
-            const r2 = Math.round(detV/detM);
-            if (Math.abs(detV/detM - r2) < 1e-6 && Math.abs(r2) > 1){
-              status.textContent = '✗ Определитель изменился в ' + r2 + ' раз: ' +
-                'det(M) = ' + fmt(detM) + ', det(V) = ' + fmt(detV) + '.';
-            } else {
-              status.textContent = '✗ Определитель не совпадает: det(M) = ' + fmt(detM) +
-                ', det(V) = ' + fmt(detV) + '.';
-            }
+          if (Math.abs(dV + dM) <= 1e-9 * scale){
+            status.textContent = '✗ Определитель сменил знак: det(M) = ' + fmt(dM) +
+              ', det(V) = ' + fmt(dV) + '. Возможно, строка умножена на −1.';
           } else {
-            status.textContent = '✗ Определитель не совпадает с исходным.';
+            status.textContent = '✗ Определитель не совпадает: det(M) = ' + fmt(dM) +
+              ', det(V) = ' + fmt(dV);
           }
           return;
         }
       }
 
-      /* 3) Строки V лежат в линейной оболочке строк M */
-      let rowsOk = true;
-      V.forEach((row,r)=>{
-        const ok = inRowSpace(M, row);
-        if (!ok) rowsOk = false;
-        inputs[r].forEach(i=>i.classList.add(ok ? 'ok' : 'bad'));
-      });
-      if (!rowsOk){
-        status.className = 'status bad';
-        status.textContent = '✗ Есть строка, не лежащая в линейной оболочке строк исходной матрицы.';
-        return;
+      /* 3) каждая строка V лежит в линейной оболочке строк M */
+      for (let r = 0; r < V.length; r++){
+        if (!inRowSpace(M, V[r])){
+          inputs.forEach((row, ri) => {
+            row.forEach(i => i.classList.add(ri === r ? 'bad' : 'ok'));
+          });
+          status.className = 'status bad';
+          status.textContent = '✗ Строка ' + (r+1) + ' не является линейной комбинацией строк M.';
+          return;
+        }
       }
 
-      /* 4) Проверка согласованности столбца B */
-      const bFilled = hasB && VB.every(v=>!isNaN(v)) && state.bComplete;
+      /* 4) обратная проверка: строки M выражаются через строки V */
+      for (let r = 0; r < M.length; r++){
+        if (!inRowSpace(V, M[r])){
+          inputs.forEach(row => row.forEach(i => i.classList.add('bad')));
+          status.className = 'status bad';
+          status.textContent = '✗ Строка ' + (r+1) + ' исходной M не выражается через строки V.';
+          return;
+        }
+      }
+
+      /* 5) согласованность столбца B */
+      const bFilled = hasB && VB && VB.every(v => !isNaN(v));
       if (bFilled){
-        const Aug = M.map((row,i) => [...row, B[i]]);
-        const AugV = V.map((row,i) => [...row, VB[i]]);
-
-        const augRankOk = rank(Aug) === rank(AugV);
-        const augRowsOk = AugV.every(r => inRowSpace(Aug, r));
-
-        if (!augRankOk || !augRowsOk){
+        const AugM = M.map((row, i) => [...row, B[i]]);
+        const AugV = V.map((row, i) => [...row, VB[i]]);
+        const sameRank = rank(AugM) === rank(AugV);
+        const rowsOk = AugV.every(r => inRowSpace(AugM, r));
+        if (!sameRank || !rowsOk){
           inputsB.forEach(i => i.classList.add('bad'));
           status.className = 'status bad';
-          status.textContent =
-            '✗ Матрица A преобразована верно, но столбец B не согласован с этими операциями.';
+          status.textContent = '✗ Столбец B не согласован с действиями над A.';
           return;
         }
         inputsB.forEach(i => i.classList.add('ok'));
       }
 
+      /* всё ок */
+      inputs.forEach(row => row.forEach(i => i.classList.add('ok')));
       if (isLast && !tri){
         status.className = 'status warn';
         status.textContent = '✓ Матрица и B согласованы. Последний шаг пока не треугольный.';
         return;
       }
       status.className = 'status ok';
-      status.textContent = '✓ Шаг корректен: ' +
-        (sq ? 'det, ' : '') + 'ранг' +
+      status.textContent = '✓ Шаг корректен: ' + (sq ? 'det, ' : '') + 'ранг' +
         (bFilled ? ' и столбец B' : '') + ' сохранены.' +
         (isLast ? ' Матрица треугольная.' : '');
     }
@@ -1003,7 +1037,7 @@ function makeStep(step, idx, M, B, hasB, isLast){
   return wrap;
 }
 
-/* ---------- 2. Определитель (только квадратная) ---------- */
+/* ---------- 2. Определитель ---------- */
 function renderDet(M, complete){
   clearSectionChecks('det');
   currentSection = 'det';
@@ -1103,7 +1137,7 @@ function renderDet(M, complete){
   box.appendChild(tot);
 }
 
-/* ---------- 3. Миноры (только квадратная) ---------- */
+/* ---------- 3. Миноры и дополнения ---------- */
 function renderMinors(M, complete){
   clearSectionChecks('minors');
   currentSection = 'minors';
@@ -1124,7 +1158,7 @@ function renderMinors(M, complete){
   box.appendChild(buildGrid(n, n, (i,j)=>cofactor(M,i,j), 'minors-a'));
 }
 
-/* ---------- 4. Транспонирование (любой размер) ---------- */
+/* ---------- 4. Транспонирование ---------- */
 function renderTranspose(M, complete){
   clearSectionChecks('transpose');
   currentSection = 'transpose';
@@ -1138,7 +1172,6 @@ function renderTranspose(M, complete){
   box.appendChild(el('div','hint',
     'Aᵀ: элемент (i, j) = aⱼᵢ. Размер меняется с ' + rows + '×' + cols +
     ' на ' + cols + '×' + rows + '.'));
-  // результат — cols × rows
   const g = el('div','grid');
   g.style.gridTemplateColumns = `repeat(${rows}, var(--cw))`;
   for (let r=0;r<cols;r++){
@@ -1154,7 +1187,7 @@ function renderTranspose(M, complete){
   box.appendChild(g);
 }
 
-/* ---------- 5. Обратная (только квадратная) ---------- */
+/* ---------- 5. Обратная ---------- */
 function renderInverse(M, complete){
   clearSectionChecks('inverse');
   currentSection = 'inverse';
@@ -1208,7 +1241,7 @@ function renderInverse(M, complete){
   box.appendChild(btn); box.appendChild(st);
 }
 
-/* ---------- 6. Крамер (только квадратная) ---------- */
+/* ---------- 6. Крамер ---------- */
 function renderCramer(M, complete){
   clearSectionChecks('cramer');
   currentSection = 'cramer';
@@ -1289,7 +1322,7 @@ function renderCramer(M, complete){
   }
 }
 
-/* ---------- 7. A⁻¹·B (только квадратная) ---------- */
+/* ---------- 7. A⁻¹·B ---------- */
 function renderInvSlae(M, complete){
   clearSectionChecks('inv-slae');
   currentSection = 'inv-slae';
