@@ -30,9 +30,12 @@ h1{font-size:22px;margin:0 0 6px}
 .label{font-size:15px;color:var(--muted)}
 .group-label{display:block;font-size:13px;color:var(--muted);margin:10px 0 6px}
 
-.sizes{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:16px}
-.size-btn{width:46px;height:46px;border-radius:12px;border:1px solid var(--line);
-  background:var(--panel2);color:var(--txt);font-size:15px;cursor:pointer;
+/* размер */
+.size-controls{display:flex;gap:28px;flex-wrap:wrap;margin-bottom:16px}
+.size-group{display:flex;gap:6px;align-items:center;flex-wrap:wrap}
+.size-group .size-label{font-size:13px;color:var(--muted);margin-right:4px}
+.size-btn{width:40px;height:40px;border-radius:10px;border:1px solid var(--line);
+  background:var(--panel2);color:var(--txt);font-size:14px;cursor:pointer;
   font-family:inherit;transition:.15s}
 .size-btn:hover{border-color:var(--accent)}
 .size-btn.active{background:var(--accent);border-color:var(--accent);color:#fff;font-weight:600}
@@ -74,7 +77,6 @@ h1{font-size:22px;margin:0 0 6px}
   font-size:16px;font-family:inherit;min-width:0}
 .cell-ro.highlight{border-color:var(--accent);
   background:rgba(79,140,255,.10);color:var(--txt)}
-.cell-ro.small{width:52px;height:42px;font-size:14px}
 
 .btn{background:var(--panel2);color:var(--txt);border:1px solid var(--line);
   border-radius:10px;padding:9px 14px;font-size:14px;cursor:pointer;
@@ -117,7 +119,6 @@ h1{font-size:22px;margin:0 0 6px}
 
 .minor-list{display:flex;flex-direction:column;gap:10px;margin:14px 0}
 .minor-row{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
-.el-val{min-width:36px;text-align:center;color:var(--muted);font-size:15px}
 .row{display:flex;align-items:center;gap:10px;margin-top:14px;flex-wrap:wrap}
 .tools{display:flex;gap:8px;flex-wrap:wrap}
 .tools .btn{margin-top:0}
@@ -156,17 +157,26 @@ h1{font-size:22px;margin:0 0 6px}
     <b style="color:var(--ok)">Зелёный</b> — верно,
     <b style="color:var(--bad)">красный</b> — ошибка.
     Можно писать дроби: <code>1/3</code>, <code>-7/2</code>, а также через запятую: <code>0,5</code>.<br>
-    <b>Стрелки</b> перемещают между ячейками.
-    <b>Столбец B</b> заполните, если хотите решать СЛАУ <code>A·x = B</code>.
+    Матрица может быть прямоугольной (например 5×4) — тогда доступны только <b>Гаусс</b> и <b>Транспонирование</b>.
   </div>
 
   <div class="card">
     <h2>Исходная система</h2>
-    <div class="sizes">
-      <button class="size-btn" data-n="2">2×2</button>
-      <button class="size-btn active" data-n="3">3×3</button>
-      <button class="size-btn" data-n="4">4×4</button>
-      <button class="size-btn" data-n="5">5×5</button>
+    <div class="size-controls">
+      <div class="size-group rows-group">
+        <span class="size-label">Строк:</span>
+        <button class="size-btn rows-btn" data-rows="2">2</button>
+        <button class="size-btn rows-btn active" data-rows="3">3</button>
+        <button class="size-btn rows-btn" data-rows="4">4</button>
+        <button class="size-btn rows-btn" data-rows="5">5</button>
+      </div>
+      <div class="size-group cols-group">
+        <span class="size-label">Столбцов:</span>
+        <button class="size-btn cols-btn" data-cols="2">2</button>
+        <button class="size-btn cols-btn active" data-cols="3">3</button>
+        <button class="size-btn cols-btn" data-cols="4">4</button>
+        <button class="size-btn cols-btn" data-cols="5">5</button>
+      </div>
     </div>
     <div class="matrix-pair">
       <div>
@@ -200,10 +210,9 @@ h1{font-size:22px;margin:0 0 6px}
         <h2>Метод Гаусса</h2>
         <div class="hint">
           Приводи матрицу (или расширенную [A|B]) к треугольному виду сложением / вычитанием строк.
-          Умножение строки на число и перестановки МЕНЯЮТ определитель.
-          Кнопка <b>↓</b> переносит строку из предыдущего шага (для 1-го — из исходной матрицы),
-          включая дробные значения.
-          Если столбец B заполнен, для каждого шага проверяется согласованность B с действиями над A.
+          Работает для матриц любого размера m×n.
+          Кнопка <b>↓</b> переносит строку из предыдущего шага (для 1-го — из исходной),
+          сохраняя исходную запись (<code>3/2</code> останется <code>3/2</code>).
         </div>
         <div id="gaussBody"></div>
       </div>
@@ -297,12 +306,14 @@ const zeros = (n,m) => Array.from({length:n},()=>Array(m).fill(0));
 
 function transpose(M){ return M[0].map((_,j)=>M.map(r=>r[j])); }
 
+/* minor/t det работают только для квадратных */
 function minor(M,i,j){
   return M.filter((_,r)=>r!==i).map(row=>row.filter((_,c)=>c!==j));
 }
 
 function det(M){
   const n = M.length;
+  if (n === 0) return 1;
   if (n === 1) return M[0][0];
   if (n === 2) return M[0][0]*M[1][1] - M[0][1]*M[1][0];
   let d = 0;
@@ -333,14 +344,16 @@ function rref(M){
 }
 
 function rank(M){
+  if (!M.length) return 0;
   return rref(M).filter(row=>row.some(v=>Math.abs(v)>1e-9)).length;
 }
 
 function inRowSpace(M,row){ return rank(M) === rank(M.concat([row])); }
 
 function isUpperTriangular(M){
-  for (let i=0;i<M.length;i++)
-    for (let j=0;j<i;j++)
+  const m = M.length, n = M[0].length;
+  for (let i=0;i<m;i++)
+    for (let j=0;j<Math.min(i, n);j++)
       if (Math.abs(M[i][j]) > 1e-9) return false;
   return true;
 }
@@ -547,13 +560,28 @@ function buildReadonlyGrid(values, highlightColumn){
   return g;
 }
 
+function buildReadonlyGridRaw(rawM, rawB, highlightCol){
+  const rows = rawM.length, cols = rawM[0].length;
+  const g = el('div','grid');
+  g.style.gridTemplateColumns = `repeat(${cols}, var(--cw))`;
+  for (let i=0;i<rows;i++){
+    for (let j=0;j<cols;j++){
+      const c = el('div','cell-ro' + (highlightCol === j ? ' highlight' : ''));
+      const v = (highlightCol === j) ? (rawB[i] ?? '') : (rawM[i][j] ?? '');
+      c.textContent = v === '' ? '·' : v;
+      g.appendChild(c);
+    }
+  }
+  return g;
+}
+
 function buildReadonlyVector(values){
   const n = values.length;
   const g = el('div','grid');
   g.style.gridTemplateColumns = `var(--cw)`;
   for (let i=0;i<n;i++){
     const c = el('div','cell-ro highlight');
-    c.textContent = fmt(values[i]);
+    c.textContent = values[i] === '' ? '·' : values[i];
     g.appendChild(c);
   }
   return g;
@@ -561,17 +589,20 @@ function buildReadonlyVector(values){
 
 /* ================= состояние ================= */
 const state = {
-  n: 3,
+  rows: 3,
+  cols: 3,
   steps: [],
-  detMode: { type:'row', index:0, n:3 },
+  detMode: { type:'row', index:0, size:3 },
   lastB: null,
   bComplete: false,
   bEmpty: true
 };
 
-const emptyStep = n => ({
-  A: Array.from({length:n},()=>Array(n).fill('')),
-  B: Array(n).fill('')
+const isSquare = () => state.rows === state.cols;
+
+const emptyStep = (rows, cols) => ({
+  A: Array.from({length:rows},()=>Array(cols).fill('')),
+  B: Array(rows).fill('')
 });
 
 /* ================= исходная система ================= */
@@ -586,9 +617,9 @@ function buildMainMatrix(preserve){
     });
   }
   box.innerHTML = '';
-  box.style.gridTemplateColumns = `repeat(${state.n}, var(--cw))`;
-  for (let r=0;r<state.n;r++){
-    for (let c=0;c<state.n;c++){
+  box.style.gridTemplateColumns = `repeat(${state.cols}, var(--cw))`;
+  for (let r=0;r<state.rows;r++){
+    for (let c=0;c<state.cols;c++){
       const inp = el('input','cell');
       inp.type = 'text'; inp.autocomplete = 'off';
       inp.dataset.r = r; inp.dataset.c = c;
@@ -608,7 +639,7 @@ function buildBVector(preserve){
   }
   box.innerHTML = '';
   box.style.gridTemplateColumns = `var(--cw)`;
-  for (let r=0;r<state.n;r++){
+  for (let r=0;r<state.rows;r++){
     const inp = el('input','cell');
     inp.type = 'text'; inp.autocomplete = 'off';
     inp.dataset.r = r;
@@ -620,24 +651,23 @@ function buildBVector(preserve){
 }
 
 function readMainMatrix(){
-  const n = state.n;
-  const M = zeros(n,n);
+  const rows = state.rows, cols = state.cols;
+  const M = Array.from({length:rows},()=>Array(cols).fill(NaN));
   const box = $('#mainMatrix');
-  for (let r=0;r<n;r++)
-    for (let c=0;c<n;c++){
+  for (let r=0;r<rows;r++)
+    for (let c=0;c<cols;c++){
       const inp = box.querySelector(`.cell[data-r="${r}"][data-c="${c}"]`);
       M[r][c] = parseNum(inp.value);
     }
   return M;
 }
 
-/* читаем «как есть» — строки, а не числа (для копирования строк) */
 function readMainMatrixRaw(){
-  const n = state.n;
+  const rows = state.rows, cols = state.cols;
   const box = $('#mainMatrix');
-  const M = Array.from({length:n},()=>Array(n).fill(''));
-  for (let r=0;r<n;r++)
-    for (let c=0;c<n;c++){
+  const M = Array.from({length:rows},()=>Array(cols).fill(''));
+  for (let r=0;r<rows;r++)
+    for (let c=0;c<cols;c++){
       const inp = box.querySelector(`.cell[data-r="${r}"][data-c="${c}"]`);
       M[r][c] = inp.value;
     }
@@ -645,7 +675,7 @@ function readMainMatrixRaw(){
 }
 
 function readBRaw(){
-  const n = state.n;
+  const n = state.rows;
   const box = $('#bVector');
   const B = Array(n).fill('');
   for (let r=0;r<n;r++){
@@ -656,7 +686,7 @@ function readBRaw(){
 }
 
 function readB(){
-  const n = state.n;
+  const n = state.rows;
   const B = Array(n).fill(NaN);
   const box = $('#bVector');
   for (let r=0;r<n;r++){
@@ -689,7 +719,13 @@ function rebuildSections(){
   runChecks();
 }
 
-/* ---------- 1. Метод Гаусса ---------- */
+/* Общая подсказка для несовместимого размера */
+function squareOnlyHint(){
+  return 'Этот раздел работает только для квадратных матриц. ' +
+    'Сейчас выбрано ' + state.rows + '×' + state.cols + ' — сделайте число строк равным числу столбцов.';
+}
+
+/* ---------- 1. Метод Гаусса (любой размер) ---------- */
 function renderGauss(M, complete){
   clearSectionChecks('gauss');
   currentSection = 'gauss';
@@ -700,14 +736,15 @@ function renderGauss(M, complete){
     box.appendChild(el('div','hint','Сначала заполните матрицу A полностью.'));
     return;
   }
-  const n = M.length;
+  const rows = M.length;
+  const cols = M[0].length;
   const B = state.lastB;
-  const hasB = state.bComplete;
+  const hasB = !state.bEmpty;
 
-  if (!state.steps.length) state.steps = [emptyStep(n)];
-  state.steps = state.steps.map(s=>{
-    if (s.A && s.A.length === n) return s;
-    return emptyStep(n);
+  if (!state.steps.length) state.steps = [emptyStep(rows, cols)];
+  state.steps = state.steps.map(s => {
+    if (s.A && s.A.length === rows && s.A[0] && s.A[0].length === cols) return s;
+    return emptyStep(rows, cols);
   });
 
   const list = el('div','steps');
@@ -719,40 +756,48 @@ function renderGauss(M, complete){
 
   const add = el('button','btn','+ Добавить шаг');
   add.onclick = ()=>{
-    state.steps.push(emptyStep(state.n));
+    state.steps.push(emptyStep(state.rows, state.cols));
     renderGauss(readMainMatrix(), true);
     runChecks();
   };
   box.appendChild(add);
 
-  const detBlock = el('div','det-in-gauss');
-  detBlock.appendChild(el('div','step-title','Определитель'));
-  detBlock.appendChild(el('div','hint',
-    'Определитель треугольной матрицы равен произведению диагональных элементов. ' +
-    'Если строки только складывались / вычитались, det треугольной = det исходной.'));
+  /* Определитель — только для квадратных */
+  if (isSquare()){
+    const detBlock = el('div','det-in-gauss');
+    detBlock.appendChild(el('div','step-title','Определитель'));
+    detBlock.appendChild(el('div','hint',
+      'Определитель треугольной матрицы равен произведению диагональных элементов. ' +
+      'Если строки только складывались / вычитались, det треугольной = det исходной.'));
 
-  const dRow = el('div','row');
-  dRow.appendChild(el('span','label','det A ='));
-  const dInp = el('input','cell wide');
-  dInp.type = 'text'; dInp.autocomplete = 'off';
-  setupNav(dInp, 'gauss-det', 0, 0);
-  dInp.addEventListener('input', runChecksSoon);
-  addValueCheck(dInp, det(M));
-  dRow.appendChild(dInp);
-  detBlock.appendChild(dRow);
-  box.appendChild(detBlock);
+    const dRow = el('div','row');
+    dRow.appendChild(el('span','label','det A ='));
+    const dInp = el('input','cell wide');
+    dInp.type = 'text'; dInp.autocomplete = 'off';
+    setupNav(dInp, 'gauss-det', 0, 0);
+    dInp.addEventListener('input', runChecksSoon);
+    addValueCheck(dInp, det(M));
+    dRow.appendChild(dInp);
+    detBlock.appendChild(dRow);
+    box.appendChild(detBlock);
+  } else {
+    const info = el('div','det-in-gauss');
+    info.appendChild(el('div','step-title','Определитель'));
+    info.appendChild(el('div','hint',
+      'Матрица ' + rows + '×' + cols + ' не квадратная — определителя не существует.'));
+    box.appendChild(info);
+  }
 
-  if (hasB){
+  /* Решение системы — только если квадрат и B заполнен */
+  if (isSquare() && state.bComplete){
     const xByGauss = solveByGauss(M, B);
-
     const xBlock = el('div','answer-block');
     xBlock.appendChild(el('div','step-title','Решение системы A·x = B'));
     xBlock.appendChild(el('div','hint',
-      'После приведения к треугольному виду выполни обратную подстановку и впиши x₁…xₙ. ' +
-      'Если система несовместна или имеет бесконечно много решений — оставь поля пустыми.'));
+      'После приведения к треугольному виду выполни обратную подстановку и впиши x₁…xₙ.'));
 
     const xRow = el('div','row');
-    for (let i=0;i<n;i++){
+    for (let i=0;i<rows;i++){
       const wrap = el('div','eq-row');
       wrap.appendChild(el('span','label','x' + sub(i+1) + ' ='));
       const inp = el('input','cell wide');
@@ -770,6 +815,7 @@ function renderGauss(M, complete){
 
 function solveByGauss(A, B){
   const n = A.length;
+  if (A[0].length !== n) return null;
   const r = rank(A);
   if (r !== n) return null;
   const inv = inverseMatrix(A);
@@ -786,60 +832,60 @@ function solveByGauss(A, B){
 function sub(n){ return String(n).replace(/[0-9]/g, d => '₀₁₂₃₄₅₆₇₈₉'[+d]); }
 
 function makeStep(step, idx, M, B, hasB, isLast){
-  const n = M.length;
+  const rows = M.length;
+  const cols = M[0].length;
   const wrap = el('div','step');
 
   const head = el('div','step-head');
-  head.appendChild(el('span','step-title','Шаг ' + (idx + 1)));
+  head.appendChild(el('span','step-title','Шаг ' + (idx + 1) + '  (' + rows + '×' + cols + ')'));
   const del = el('button','btn-mini','удалить');
   del.onclick = ()=>{
     state.steps.splice(idx, 1);
-    if (!state.steps.length) state.steps.push(emptyStep(state.n));
+    if (!state.steps.length) state.steps.push(emptyStep(rows, cols));
     renderGauss(readMainMatrix(), true);
     runChecks();
   };
   head.appendChild(del);
   wrap.appendChild(head);
 
-  const cols = hasB ? n + 1 : n;
+  const totalCols = hasB ? cols + 1 : cols;
   const grid = el('div','grid');
-  grid.style.gridTemplateColumns = `32px repeat(${cols}, var(--cw))`;
+  grid.style.gridTemplateColumns = `32px repeat(${totalCols}, var(--cw))`;
 
   const inputs = [];
   const inputsB = [];
-  for (let r=0;r<n;r++){
+  for (let r=0;r<rows;r++){
     const copyBtn = el('button','copy-row-btn','↓');
     copyBtn.title = 'Скопировать строку ' + (r+1) + ' из ' +
-      (idx === 0 ? 'исходной матрицы' : 'шага ' + idx);
+      (idx === 0 ? 'исходной матрицы' : 'шага ' + idx) + ' (в исходной записи)';
     copyBtn.onclick = ()=>{
-      /* Берём значения «как есть» — дроби сохраняются без изменений */
       const srcA = idx === 0
         ? readMainMatrixRaw()
-        : state.steps[idx-1].A.map(row=>row.map(v=>String(v == null ? '' : v)));
+        : state.steps[idx-1].A.map(row => row.map(v => v == null ? '' : String(v)));
       const srcB = idx === 0
         ? readBRaw()
-        : (state.steps[idx-1].B || []).map(v=>String(v == null ? '' : v));
+        : (state.steps[idx-1].B || []).map(v => v == null ? '' : String(v));
 
-      for (let c=0;c<n;c++){
-        const v = srcA[r][c];
-        inputs[r][c].value = (v != null) ? v : '';
-        step.A[r][c] = inputs[r][c].value;
+      for (let c=0;c<cols;c++){
+        const v = (srcA[r] && srcA[r][c] != null) ? srcA[r][c] : '';
+        inputs[r][c].value = v;
+        step.A[r][c] = v;
       }
       if (hasB && inputsB[r]){
-        const v = srcB[r];
-        inputsB[r].value = (v != null) ? v : '';
-        step.B[r] = inputsB[r].value;
+        const v = (srcB[r] != null) ? srcB[r] : '';
+        inputsB[r].value = v;
+        step.B[r] = v;
       }
       runChecks();
     };
     grid.appendChild(copyBtn);
 
     inputs.push([]);
-    for (let c=0;c<n;c++){
+    for (let c=0;c<cols;c++){
       const inp = el('input','cell');
       inp.type = 'text'; inp.autocomplete = 'off';
       setupNav(inp, 'gauss-step-' + idx, r, c);
-      inp.value = step.A[r][c] || '';
+      inp.value = step.A[r][c] ?? '';
       inp.addEventListener('input', ()=>{ step.A[r][c] = inp.value; runChecksSoon(); });
       inputs[r].push(inp);
       grid.appendChild(inp);
@@ -848,8 +894,8 @@ function makeStep(step, idx, M, B, hasB, isLast){
     if (hasB){
       const inp = el('input','cell');
       inp.type = 'text'; inp.autocomplete = 'off';
-      setupNav(inp, 'gauss-step-' + idx, r, n);
-      inp.value = step.B[r] || '';
+      setupNav(inp, 'gauss-step-' + idx, r, cols);
+      inp.value = step.B[r] ?? '';
       inp.addEventListener('input', ()=>{ step.B[r] = inp.value; runChecksSoon(); });
       inputsB.push(inp);
       grid.appendChild(inp);
@@ -871,11 +917,9 @@ function makeStep(step, idx, M, B, hasB, isLast){
       if (!V.every(row=>row.every(v=>!isNaN(v)))) return;
 
       const VB = hasB ? inputsB.map(i=>parseNum(i.value)) : null;
-      const bFilled = hasB && VB.every(v=>!isNaN(v));
 
       const tri = isUpperTriangular(V);
-      const detM = det(M);
-      const detV = det(V);
+      const sq = rows === cols;
 
       /* 1) Ранг A сохраняется */
       if (rank(V) !== rank(M)){
@@ -885,30 +929,33 @@ function makeStep(step, idx, M, B, hasB, isLast){
         return;
       }
 
-      /* 2) Определитель A сохраняется */
-      if (!eq(detV, detM)){
-        inputs.forEach(row=>row.forEach(i=>i.classList.add('bad')));
-        status.className = 'status bad';
-        if (eq(detV, -detM)){
-          status.textContent = '✗ Определитель сменил знак: det(M) = ' + fmt(detM) +
-            ', det(V) = ' + fmt(detV) + '. Возможно, строка умножена на −1.';
-        } else if (Math.abs(detM) > 1e-9){
-          const r2 = Math.round(detV/detM);
-          if (Math.abs(detV/detM - r2) < 1e-6 && Math.abs(r2) > 1){
-            status.textContent = '✗ Определитель изменился в ' + r2 + ' раз: ' +
-              'det(M) = ' + fmt(detM) + ', det(V) = ' + fmt(detV) +
-              '. Похоже, строка умножена на число.';
+      /* 2) Для квадратной — сохранение det */
+      if (sq){
+        const detM = det(M);
+        const detV = det(V);
+        if (!eq(detV, detM)){
+          inputs.forEach(row=>row.forEach(i=>i.classList.add('bad')));
+          status.className = 'status bad';
+          if (eq(detV, -detM)){
+            status.textContent = '✗ Определитель сменил знак: det(M) = ' + fmt(detM) +
+              ', det(V) = ' + fmt(detV) + '. Возможно, строка умножена на −1.';
+          } else if (Math.abs(detM) > 1e-9){
+            const r2 = Math.round(detV/detM);
+            if (Math.abs(detV/detM - r2) < 1e-6 && Math.abs(r2) > 1){
+              status.textContent = '✗ Определитель изменился в ' + r2 + ' раз: ' +
+                'det(M) = ' + fmt(detM) + ', det(V) = ' + fmt(detV) + '.';
+            } else {
+              status.textContent = '✗ Определитель не совпадает: det(M) = ' + fmt(detM) +
+                ', det(V) = ' + fmt(detV) + '.';
+            }
           } else {
-            status.textContent = '✗ Определитель не совпадает: det(M) = ' + fmt(detM) +
-              ', det(V) = ' + fmt(detV) + '.';
+            status.textContent = '✗ Определитель не совпадает с исходным.';
           }
-        } else {
-          status.textContent = '✗ Определитель не совпадает с исходным.';
+          return;
         }
-        return;
       }
 
-      /* 3) Каждая строка V лежит в линейной оболочке строк M */
+      /* 3) Строки V лежат в линейной оболочке строк M */
       let rowsOk = true;
       V.forEach((row,r)=>{
         const ok = inRowSpace(M, row);
@@ -922,7 +969,8 @@ function makeStep(step, idx, M, B, hasB, isLast){
       }
 
       /* 4) Проверка согласованности столбца B */
-      if (hasB && bFilled){
+      const bFilled = hasB && VB.every(v=>!isNaN(v)) && state.bComplete;
+      if (bFilled){
         const Aug = M.map((row,i) => [...row, B[i]]);
         const AugV = V.map((row,i) => [...row, VB[i]]);
 
@@ -933,8 +981,7 @@ function makeStep(step, idx, M, B, hasB, isLast){
           inputsB.forEach(i => i.classList.add('bad'));
           status.className = 'status bad';
           status.textContent =
-            '✗ Матрица A преобразована верно, но столбец B не согласован с этими операциями. ' +
-            'Каждая строка [A′ᵣ | B′ᵣ] должна лежать в линейной оболочке строк исходной расширенной [A | B].';
+            '✗ Матрица A преобразована верно, но столбец B не согласован с этими операциями.';
           return;
         }
         inputsB.forEach(i => i.classList.add('ok'));
@@ -946,8 +993,9 @@ function makeStep(step, idx, M, B, hasB, isLast){
         return;
       }
       status.className = 'status ok';
-      status.textContent = '✓ Шаг корректен: det, ранг' +
-        (hasB && bFilled ? ' и столбец B' : '') + ' сохранены.' +
+      status.textContent = '✓ Шаг корректен: ' +
+        (sq ? 'det, ' : '') + 'ранг' +
+        (bFilled ? ' и столбец B' : '') + ' сохранены.' +
         (isLast ? ' Матрица треугольная.' : '');
     }
   });
@@ -955,12 +1003,16 @@ function makeStep(step, idx, M, B, hasB, isLast){
   return wrap;
 }
 
-/* ---------- 2. Определитель ---------- */
+/* ---------- 2. Определитель (только квадратная) ---------- */
 function renderDet(M, complete){
   clearSectionChecks('det');
   currentSection = 'det';
   const box = $('#detBody');
   box.innerHTML = '';
+  if (!isSquare()){
+    box.appendChild(el('div','hint', squareOnlyHint()));
+    return;
+  }
   if (!complete){
     box.appendChild(el('div','hint','Сначала заполните матрицу A полностью.'));
     return;
@@ -981,8 +1033,8 @@ function renderDet(M, complete){
     return;
   }
 
-  if (!state.detMode || state.detMode.n !== n || state.detMode.index >= n){
-    state.detMode = { type:'row', index:0, n };
+  if (!state.detMode || state.detMode.size !== n || state.detMode.index >= n){
+    state.detMode = { type:'row', index:0, size: n };
   }
 
   box.appendChild(el('div','hint',
@@ -994,7 +1046,7 @@ function renderDet(M, complete){
   for (let i=0;i<n;i++){
     const b = el('button','mode-btn','Строка ' + (i+1));
     if (state.detMode.type === 'row' && state.detMode.index === i) b.classList.add('active');
-    b.onclick = ()=>{ state.detMode = { type:'row', index:i, n }; renderDet(readMainMatrix(), true); runChecks(); };
+    b.onclick = ()=>{ state.detMode = { type:'row', index:i, size:n }; renderDet(readMainMatrix(), true); runChecks(); };
     rowBar.appendChild(b);
   }
   box.appendChild(rowBar);
@@ -1004,7 +1056,7 @@ function renderDet(M, complete){
   for (let j=0;j<n;j++){
     const b = el('button','mode-btn','Столбец ' + (j+1));
     if (state.detMode.type === 'col' && state.detMode.index === j) b.classList.add('active');
-    b.onclick = ()=>{ state.detMode = { type:'col', index:j, n }; renderDet(readMainMatrix(), true); runChecks(); };
+    b.onclick = ()=>{ state.detMode = { type:'col', index:j, size:n }; renderDet(readMainMatrix(), true); runChecks(); };
     colBar.appendChild(b);
   }
   box.appendChild(colBar);
@@ -1051,12 +1103,16 @@ function renderDet(M, complete){
   box.appendChild(tot);
 }
 
-/* ---------- 3. Миноры и дополнения ---------- */
+/* ---------- 3. Миноры (только квадратная) ---------- */
 function renderMinors(M, complete){
   clearSectionChecks('minors');
   currentSection = 'minors';
   const box = $('#minorsBody');
   box.innerHTML = '';
+  if (!isSquare()){
+    box.appendChild(el('div','hint', squareOnlyHint()));
+    return;
+  }
   if (!complete){
     box.appendChild(el('div','hint','Сначала заполните матрицу A полностью.'));
     return;
@@ -1068,7 +1124,7 @@ function renderMinors(M, complete){
   box.appendChild(buildGrid(n, n, (i,j)=>cofactor(M,i,j), 'minors-a'));
 }
 
-/* ---------- 4. Транспонирование ---------- */
+/* ---------- 4. Транспонирование (любой размер) ---------- */
 function renderTranspose(M, complete){
   clearSectionChecks('transpose');
   currentSection = 'transpose';
@@ -1078,17 +1134,36 @@ function renderTranspose(M, complete){
     box.appendChild(el('div','hint','Сначала заполните матрицу A полностью.'));
     return;
   }
-  const n = M.length;
-  box.appendChild(el('div','hint','Aᵀ: элемент (i, j) = aⱼᵢ.'));
-  box.appendChild(buildGrid(n, n, (r,c)=>M[c][r], 'transpose'));
+  const rows = M.length, cols = M[0].length;
+  box.appendChild(el('div','hint',
+    'Aᵀ: элемент (i, j) = aⱼᵢ. Размер меняется с ' + rows + '×' + cols +
+    ' на ' + cols + '×' + rows + '.'));
+  // результат — cols × rows
+  const g = el('div','grid');
+  g.style.gridTemplateColumns = `repeat(${rows}, var(--cw))`;
+  for (let r=0;r<cols;r++){
+    for (let c=0;c<rows;c++){
+      const inp = el('input','cell');
+      inp.type = 'text'; inp.autocomplete = 'off';
+      setupNav(inp, 'transpose', r, c);
+      inp.addEventListener('input', runChecksSoon);
+      addValueCheck(inp, M[c][r]);
+      g.appendChild(inp);
+    }
+  }
+  box.appendChild(g);
 }
 
-/* ---------- 5. Обратная матрица ---------- */
+/* ---------- 5. Обратная (только квадратная) ---------- */
 function renderInverse(M, complete){
   clearSectionChecks('inverse');
   currentSection = 'inverse';
   const box = $('#inverseBody');
   box.innerHTML = '';
+  if (!isSquare()){
+    box.appendChild(el('div','hint', squareOnlyHint()));
+    return;
+  }
   if (!complete){
     box.appendChild(el('div','hint','Сначала заполните матрицу A полностью.'));
     return;
@@ -1133,12 +1208,16 @@ function renderInverse(M, complete){
   box.appendChild(btn); box.appendChild(st);
 }
 
-/* ---------- 6. СЛАУ: метод Крамера ---------- */
+/* ---------- 6. Крамер (только квадратная) ---------- */
 function renderCramer(M, complete){
   clearSectionChecks('cramer');
   currentSection = 'cramer';
   const box = $('#cramerBody');
   box.innerHTML = '';
+  if (!isSquare()){
+    box.appendChild(el('div','hint', squareOnlyHint()));
+    return;
+  }
   if (!complete){
     box.appendChild(el('div','hint','Сначала заполните матрицу A полностью.'));
     return;
@@ -1177,9 +1256,9 @@ function renderCramer(M, complete){
       shown = !shown;
       holder.innerHTML = '';
       if (shown){
-        const Ak = M.map(r=>r.slice());
-        for (let i=0;i<n;i++) Ak[i][k] = B[i];
-        holder.appendChild(buildReadonlyGrid(Ak, k));
+        const rawM = readMainMatrixRaw();
+        const rawB = readBRaw();
+        holder.appendChild(buildReadonlyGridRaw(rawM, rawB, k));
       }
     };
     hdr.appendChild(insBtn);
@@ -1210,12 +1289,16 @@ function renderCramer(M, complete){
   }
 }
 
-/* ---------- 7. СЛАУ: x = A⁻¹·B ---------- */
+/* ---------- 7. A⁻¹·B (только квадратная) ---------- */
 function renderInvSlae(M, complete){
   clearSectionChecks('inv-slae');
   currentSection = 'inv-slae';
   const box = $('#invSlaeBody');
   box.innerHTML = '';
+  if (!isSquare()){
+    box.appendChild(el('div','hint', squareOnlyHint()));
+    return;
+  }
   if (!complete){
     box.appendChild(el('div','hint','Сначала заполните матрицу A полностью.'));
     return;
@@ -1230,8 +1313,7 @@ function renderInvSlae(M, complete){
   const x = solveByInverse(M, B);
 
   box.appendChild(el('div','hint',
-    'Решение: x = A⁻¹ · B. Матрица A⁻¹ и вектор B даны ниже; ' +
-    'xᵢ — скалярное произведение i-й строки A⁻¹ на столбец B.'));
+    'Решение: x = A⁻¹ · B. Матрица A⁻¹ и вектор B даны ниже.'));
 
   if (inv){
     box.appendChild(el('div','step-title','A⁻¹'));
@@ -1241,7 +1323,7 @@ function renderInvSlae(M, complete){
   }
 
   box.appendChild(el('div','step-title','B'));
-  box.appendChild(buildReadonlyVector(B));
+  box.appendChild(buildReadonlyVector(readBRaw()));
 
   if (inv){
     box.appendChild(el('div','step-title','Ответ x = A⁻¹·B'));
@@ -1271,15 +1353,26 @@ function renderInvSlae(M, complete){
 }
 
 /* ================= интерфейс ================= */
-$$('.size-btn').forEach(b=>{
+$$('.rows-btn').forEach(b=>{
   b.onclick = ()=>{
-    $$('.size-btn').forEach(x=>x.classList.remove('active'));
+    $$('.rows-btn').forEach(x=>x.classList.remove('active'));
     b.classList.add('active');
-    state.n = +b.dataset.n;
+    state.rows = +b.dataset.rows;
     state.steps = [];
-    state.detMode = { type:'row', index:0, n: state.n };
-    buildMainMatrix(true);
-    buildBVector(true);
+    buildMainMatrix(false);
+    buildBVector(false);
+    rebuildSections();
+  };
+});
+
+$$('.cols-btn').forEach(b=>{
+  b.onclick = ()=>{
+    $$('.cols-btn').forEach(x=>x.classList.remove('active'));
+    b.classList.add('active');
+    state.cols = +b.dataset.cols;
+    state.steps = [];
+    buildMainMatrix(false);
+    buildBVector(false);
     rebuildSections();
   };
 });
